@@ -1,0 +1,27 @@
+# Build stage (Maven)
+FROM maven:3.9.6-eclipse-temurin-17 AS build
+WORKDIR /app
+
+# copy maven wrapper and pom first to leverage caching
+COPY pom.xml mvnw ./
+COPY .mvn .mvn
+
+# copy source & build
+COPY src src
+RUN mvn -B -DskipTests package
+
+# Runtime stage (JRE)
+FROM eclipse-temurin:17-jre
+WORKDIR /app
+
+# Copy jar from build stage
+COPY --from=build /app/target/*.jar /app/app.jar
+
+# Copy wait script (make sure file exists in ems-backend/wait-for-it.sh)
+COPY wait-for-it.sh /usr/local/bin/wait-for-it.sh
+RUN chmod +x /usr/local/bin/wait-for-it.sh
+
+EXPOSE 8081
+
+# Wait for MySQL (service name 'db' on port 3306) then run the Spring Boot jar
+ENTRYPOINT ["/usr/local/bin/wait-for-it.sh", "db:3306", "--", "java", "-jar", "/app/app.jar"]
